@@ -1,0 +1,11 @@
+# Packages
+__pycache__ 
+
+# Translations
+*.mo
+
+venv
+.env 
+.idea
+app.db 
+logs 
