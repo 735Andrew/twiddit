@@ -13,6 +13,7 @@ import sqlalchemy as sa
 
 @bp.before_request
 def before_request():
+    # Функция, фиксирующая время последнего визита пользователя.
     if current_user.is_authenticated:
         current_user.last_seen = datetime.now(timezone.utc)
         db.session.commit()
@@ -23,6 +24,7 @@ def before_request():
 @bp.route("/index", methods=["GET", "POST"])
 @login_required
 def index():
+    """Маршрут главной страницы приложения"""
     form = PostForm()
     if form.validate_on_submit():
         try:
@@ -46,6 +48,7 @@ def index():
 @bp.route("/explore")
 @login_required
 def explore():
+    """Маршрут просмотра всех постов пользователей"""
     page = request.args.get('page', 1, type=int)
     query = sa.select(Post).order_by(Post.timestamp.desc())
     posts = db.paginate(query, page=page, per_page=current_app.config["POSTS_PER_PAGE"], error_out=False)
@@ -58,7 +61,9 @@ def explore():
 @bp.route('/user/<username>')
 @login_required
 def user(username):
-    user = db.first_or_404(sa.select(User).where(User.username == username))
+    """Маршрут профиля пользователя"""
+    query = sa.select(User).where(User.username == username)
+    user = db.first_or_404(query)
     page = request.args.get("page", 1, type=int)
     query = user.posts.select().order_by(Post.timestamp.desc())
     posts = db.paginate(query, page=page, per_page=current_app.config["POSTS_PER_PAGE"], error_out=False)
@@ -72,6 +77,7 @@ def user(username):
 @bp.route("/edit_profile", methods=["GET", "POST"])
 @login_required
 def edit_profile():
+    """Маршрут редактирования профиля пользователем"""
     form = EditProfileForm(current_user.username)
     if form.validate_on_submit():
         current_user.username = form.username.data
@@ -80,6 +86,8 @@ def edit_profile():
         flash(_("Your changes have been saved."))
         return redirect(url_for("main.edit_profile"))
     elif request.method == "GET":
+        # В случае, если пользователь только намеревается
+        # редактировать данные - ему показываются его текущие.
         form.username.data = current_user.username
         form.about_me.data = current_user.about_me
     return render_template("edit_profile.html", title=_("Edit Profile"), form=form)
@@ -88,9 +96,11 @@ def edit_profile():
 @bp.route('/follow/<username>', methods=["POST"])
 @login_required
 def follow(username):
+    """Маршрут подписки пользователя на пользователя"""
     form = EmptyForm()
     if form.validate_on_submit():
-        user = db.session.scalar(sa.select(User).where(User.username == username))
+        query = sa.select(User).where(User.username == username)
+        user = db.session.scalar(query)
         if user is None:
             flash(_("User %(username)s not found.", username=username))
             return redirect(url_for('main.index'))
@@ -108,6 +118,7 @@ def follow(username):
 @bp.route("/unfollow/<username>", methods=["POST"])
 @login_required
 def unfollow(username):
+    """Маршрут отписки пользователя от пользователя"""
     form = EmptyForm()
     if form.validate_on_submit():
         user = db.session.scalar(sa.select(User).where(User.username == username))
@@ -137,6 +148,7 @@ def translate_text():
 @bp.route("/user/<username>/popup")
 @login_required
 def user_popup(username):
+    """Маршрут всплывающего окна пользователя"""
     user = db.first_or_404(sa.select(User).where(User.username == username))
     form = EmptyForm()
     return render_template("user_popup.html", user=user, form=form)

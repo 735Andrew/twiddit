@@ -12,15 +12,23 @@ from flask_babel import _
 
 @bp.route('/login', methods=["GET", "POST"])
 def login():
+    """Маршрут регистрации пользователя."""
     if current_user.is_authenticated:
+        # В случае, если пользователь уже зарегистрирован в системе -
+        # он минует систему верификации.
         return redirect(url_for("main.index"))
-    form = LoginForm()
+    form = LoginForm() # Форма регистрации
     if form.validate_on_submit():
-        user = db.session.scalar(sa.select(User).where(User.username == form.username.data))
+        query = sa.select(User).where(User.username == form.username.data)
+        user = db.session.scalar(query) # Запрос к БД для проверки наличия пользователя
         if user is None or not user.check_password(form.password.data):
             flash(_("Invalid username or password"))
             return redirect(url_for("auth.login"))
         login_user(user, remember=form.remember_me.data)
+
+        # Возвращение пользователя к изначальному его запросу в случае если:
+        # 1. Пользователь не был зарегистрирован в системе
+        # 2. Пользователь переходил не на адрес /login
         next_page = request.args.get("next")
         if not next_page or urlsplit(next_page).netloc != " ":
             next_page = url_for("main.index")
@@ -30,12 +38,14 @@ def login():
 
 @bp.route("/logout")
 def logout():
+    """Маршрут выхода пользователя из системы"""
     logout_user()
     return redirect(url_for("main.index"))
 
 
 @bp.route('/register', methods=["GET", "POST"])
 def register():
+    """Маршрут регистрации пользователя в приложении"""
     if current_user.is_authenticated:
         return redirect(url_for('auth.index'))
     form = RegistrationForm()
@@ -51,11 +61,13 @@ def register():
 
 @bp.route("/reset_password_request", methods=["GET", "POST"])
 def reset_password_request():
+    """Маршрут сброса пароля пользователем"""
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
-        user = db.session.scalar(sa.select(User).where(User.email == form.email.data))
+        query = sa.select(User).where(User.email == form.email.data)
+        user = db.session.scalar(query)
         if user:
             send_password_reset_email(user)
         flash(_('Check your email for the instructions to reset your password'))
@@ -65,6 +77,7 @@ def reset_password_request():
 
 @bp.route("/reset_password/<token>", methods=["GET", "POST"])
 def reset_password(token):
+    """Маршрут обновления пароля пользователем"""
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
     user = User.verify_reset_password_token(token)

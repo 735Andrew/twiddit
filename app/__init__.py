@@ -5,16 +5,16 @@ from flask_login import LoginManager
 from flask_mail import Mail
 from flask_moment import Moment
 from flask_babel import Babel, lazy_gettext as _l
-from config import Config
 from elasticsearch import Elasticsearch
 from redis import Redis
 import logging, os, rq
 from logging.handlers import SMTPHandler, RotatingFileHandler
-
-
+from config import Config
 
 
 def get_locale():
+    # Выбор лучшего пересечения между языками
+    # воспринимаемые клиентом, и поддерживаемые приложение
     return request.accept_languages.best_match(current_app.config["LANGUAGES"])
 
 
@@ -29,6 +29,7 @@ babel = Babel()
 
 
 def create_app(config_class=Config):
+    """Функция фабрики приложения"""
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -37,10 +38,13 @@ def create_app(config_class=Config):
     login.init_app(app)
     mail.init_app(app)
     moment.init_app(app)
-    babel.init_app(app)
+    babel.init_app(app, locale_selector=get_locale)
 
-    app.elasticsearch = Elasticsearch([app.config["ELASTICSEARCH_URL"]]) \
-                        if app.config["ELASTICSEARCH_URL"] else None
+    app.elasticsearch = (
+        Elasticsearch([app.config["ELASTICSEARCH_URL"]])
+        if app.config["ELASTICSEARCH_URL"]
+        else None
+    )
     app.redis = Redis.from_url(app.config["REDIS_URL"])
     app.test_queue = rq.Queue("twiddit-tasks", connection=app.redis)
 
@@ -60,6 +64,7 @@ def create_app(config_class=Config):
     app.register_blueprint(api_bp, url_prefix="/api")
 
     if not app.debug or not app.testing:
+        # Отправка ошибок на почту
         if app.config["MAIL_SERVER"]:
             auth = None
             if app.config["MAIL_USERNAME"] or app.config["MAIL_USERNAME"]:
@@ -78,14 +83,25 @@ def create_app(config_class=Config):
             mail_handler.setLevel(logging.ERROR)
             app.logger.addHandler(mail_handler)
 
-        if not os.path.exists("logs"):
-            os.mkdir("logs")
-        file_handler = RotatingFileHandler("logs/twiddit.log", maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"
-        ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
+        # Запись ошибок в журналы
+        if app.config["LOG_TO_STDOUT"]:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setLevel(logging.INFO)
+            app.logger.addHandler(stream_handler)
+        else:
+            if not os.path.exists("logs"):
+                os.mkdir("logs")
+            file_handler = RotatingFileHandler(
+                "logs/twiddit.log", maxBytes=20480, backupCount=20
+            )
+            file_handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s %(levelname)s: %(message)s "
+                    "[in %(pathname)s:%(lineno)d]"
+                )
+            )
+            file_handler.setLevel(logging.INFO)
+            app.logger.addHandler(file_handler)
 
         app.logger.setLevel(logging.INFO)
         app.logger.info("Twiddit startup")

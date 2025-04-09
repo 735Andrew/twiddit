@@ -16,8 +16,9 @@ def _set_task_progress(progress):
         job.meta["progress"] = progress
         job.save_meta()
         task = db.session.get(Task, job.get_id())
-        task.user.add_notification("task_progress", {"id": job.get_id(),
-                                                     "progress": progress})
+        task.user.add_notification(
+            "task_progress", {"id": job.get_id(), "progress": progress}
+        )
 
         if progress >= 100:
             task.complete = True
@@ -31,14 +32,18 @@ def export_posts(user_id):
         _set_task_progress(0)
         data = []
         i = 0
-        total_post = db.session.scalar(sa.select(sa.func.count()).select_from(
-            user.posts.select().subquery()))
-        for post in db.session.scalars(user.posts.select().order_by(
-                Post.timestamp.asc())):
-            data.append({
-                "body": post.body,
-                "timestamp": post.timestamp.isoformat() + "Z",
-            })
+        total_post = db.session.scalar(
+            sa.select(sa.func.count()).select_from(user.posts.select().subquery())
+        )
+        for post in db.session.scalars(
+            user.posts.select().order_by(Post.timestamp.asc())
+        ):
+            data.append(
+                {
+                    "body": post.body,
+                    "timestamp": post.timestamp.isoformat() + "Z",
+                }
+            )
             time.sleep(5)
             i += 1
             _set_task_progress((i * 100) // total_post)
@@ -49,11 +54,13 @@ def export_posts(user_id):
             recipients=[user.email],
             text_body=render_template("email/export_posts.txt", user=user),
             html_body=render_template("email/export_posts.html", user=user),
-            attachments=[(
-                "posts.json",
-                "application/json",
-                json.dumps({"posts": data}, indent=4)
-            )],
+            attachments=[
+                (
+                    "posts.json",
+                    "application/json",
+                    json.dumps({"posts": data}, indent=4),
+                )
+            ],
             sync=True,
         )
     except:
